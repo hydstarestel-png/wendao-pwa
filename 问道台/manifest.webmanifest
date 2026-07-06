@@ -1,0 +1,17 @@
+{
+  "name": "问道台 · 考研修炼系统",
+  "short_name": "问道台",
+  "description": "任务、修为、复盘与英语道境一体化的个人修炼系统",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07100f",
+  "theme_color": "#071613",
+  "icons": [
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"},
+    {"src":"icons/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}
+  ]
+}

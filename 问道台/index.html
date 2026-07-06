@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#071613" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>问道台 · 考研修炼系统</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <aside class="sidebar" aria-label="主导航">
+    <div class="brand">
+      <div class="brand-mark">道</div>
+      <div><strong>问道台</strong><span>考研修炼系统</span></div>
+    </div>
+    <nav id="nav">
+      <button class="nav-item active" data-view="dashboard"><span>◈</span>今日洞府</button>
+      <button class="nav-item" data-view="realm"><span>◎</span>境界天梯</button>
+      <button class="nav-item" data-view="english"><span>文</span>英语道境</button>
+      <button class="nav-item" data-view="history"><span>▦</span>修行簿</button>
+    </nav>
+    <div class="sidebar-bottom">
+      <button class="nav-item" data-view="settings"><span>⚙</span>系统设置</button>
+      <div class="motto">计划服务于你<br />不是用来审判你</div>
+    </div>
+  </aside>
+
+  <main class="main-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow"><span id="todayLabel"></span><span class="live-time-badge"><i></i>自动校时</span></p>
+        <h1 id="pageTitle">今日洞府</h1>
+      </div>
+      <div class="top-actions">
+        <button id="installAppBtn" class="install-app-btn" hidden aria-label="安装问道台">⇩ <span>安装</span></button>
+        <button id="cloudStatusBtn" class="cloud-status-btn"><span>☁</span><b id="cloudStatusText">本机模式</b></button>
+        <button id="notificationBtn" class="ghost-btn">开启提醒</button>
+        <button id="openCheckin" class="primary-btn">今日复盘</button>
+      </div>
+    </header>
+
+    <section id="dashboard" class="view active">
+      <div id="alertStrip" class="alert-strip"></div>
+
+      <div class="hero-grid">
+        <article class="realm-card ink-card">
+          <div class="realm-card-top">
+            <span class="seal">当前境界</span>
+            <span id="phasePill" class="phase-pill"></span>
+          </div>
+          <div class="realm-core">
+            <div class="realm-ring" id="realmRing">
+              <div><span id="realmMinor">凝气一层</span><strong id="realmPercent">0%</strong></div>
+            </div>
+            <div class="realm-copy">
+              <p id="realmMeaning">整顿昼夜 · 收摄心神 · 重建道基</p>
+              <h2><span id="currentXp">0</span> <small>/ <span id="nextXp">320</span> 修为</small></h2>
+              <div class="progress-track"><i id="realmProgress"></i></div>
+              <p id="nextRealmHint" class="muted"></p>
+            </div>
+          </div>
+          <div class="realm-footer">
+            <div><span>距问鼎</span><strong id="xpToSummit">25,000</strong></div>
+            <div><span>累计修炼</span><strong id="totalUnits">0 单元</strong></div>
+            <div><span>距成人礼</span><strong id="daysToExam">—</strong></div>
+          </div>
+        </article>
+
+        <article class="focus-card ink-card">
+          <div class="card-heading">
+            <div><span class="seal gold">今日心法</span><h3>专注计时</h3></div>
+            <span id="timerMode" class="subtle-tag">修炼 · 25 分钟</span>
+          </div>
+          <div class="timer" id="timerDisplay">25:00</div>
+          <p id="timerTask" class="timer-task">选择一项任务，然后只做这一件事。</p>
+          <div class="timer-actions">
+            <button id="timerStart" class="primary-btn wide">开始入定</button>
+            <button id="timerReset" class="icon-btn" aria-label="重置计时">↺</button>
+          </div>
+          <div class="timer-dots" id="timerDots"></div>
+        </article>
+      </div>
+
+      <div class="dashboard-grid">
+        <article class="tasks-card panel span-2">
+          <div class="card-heading">
+            <div><p class="eyebrow">今日修炼令 · 即时反馈</p><h3 id="taskHeading">主线与支线</h3></div>
+            <div class="task-live-stats"><strong id="todayGeneralXp">今日 0 修为</strong><span id="taskDoneCount">0 / 18 单元</span></div>
+          </div>
+          <div id="taskList" class="task-list"></div>
+          <div class="task-card-actions"><button id="addCustomTask" class="primary-btn">＋ 自定义修炼任务</button><button id="scanTaskChart" class="ghost-btn">▧ 识别课表 / 计划表</button><button id="applySurvival" class="ghost-btn">切换最低保命日</button><span>深度 +12 · 标准 +10 · 轻度 +6 · 每日封顶 18 单元 / 180 修为</span></div>
+        </article>
+
+        <article class="panel foundation-card">
+          <div class="card-heading">
+            <div><p class="eyebrow">道基状态</p><h3>今日四印</h3></div>
+            <strong id="foundationScore" class="score-orb">0/4</strong>
+          </div>
+          <div id="foundationList" class="foundation-list"></div>
+          <p class="muted small">道基不增加学业修为，但决定能否突破境界。</p>
+        </article>
+
+        <article class="panel trend-card">
+          <div class="card-heading">
+            <div><p class="eyebrow">七日气脉</p><h3>修为走势</h3></div>
+            <span id="weekXp" class="subtle-tag">本周 0</span>
+          </div>
+          <div id="weekChart" class="week-chart"></div>
+          <div class="legend"><span><i class="jade"></i>修为</span><span><i class="gold-dot"></i>道基</span></div>
+        </article>
+
+        <article class="panel limits-card">
+          <div class="card-heading">
+            <div><p class="eyebrow">清心戒律</p><h3>数字刺激额度</h3></div>
+            <span id="digitalPhase" class="subtle-tag"></span>
+          </div>
+          <div id="limitMeters"></div>
+          <blockquote>休息的五分钟不能刷手机。站起来，喝水，看看窗外。</blockquote>
+        </article>
+
+        <article class="panel main-quest-card">
+          <p class="eyebrow">当前双主线</p>
+          <h3>重建道基；把英语神识续航从 15 分钟推进到 30 分钟。</h3>
+          <div class="quest-chips"><span>稳定作息</span><span>断尾诀</span><span>听音瞬间取义</span><span id="dashboardEnglishXp">英语 45 E-XP</span></div>
+          <button class="text-btn" data-jump="english">查看英语入宗试炼 →</button>
+        </article>
+      </div>
+    </section>
+
+    <section id="realm" class="view">
+      <div class="section-intro"><p class="eyebrow">双钥匙晋级</p><h2>境界天梯</h2><p>修为达到阈值只是第一把钥匙；真实能力试炼，是第二把钥匙。</p></div>
+      <div class="realm-layout">
+        <article class="panel realm-map-panel"><div id="realmMap" class="realm-map"></div></article>
+        <article class="panel trial-panel">
+          <p class="eyebrow">突破资格</p><h3 id="trialTitle">凝气期 · 道基试炼</h3>
+          <div id="trialChecklist" class="trial-checklist"></div>
+          <div id="breakthroughStatus" class="breakthrough-status"></div>
+        </article>
+      </div>
+    </section>
+
+    <section id="english" class="view">
+      <div class="section-intro"><p class="eyebrow">耳朵追上眼睛</p><h2>英语道境</h2><p>境界看下限和稳定性，战力看最好成绩。一次峰值是“爆种”，最近五次的稳定表现才决定突破。</p></div>
+      <div class="english-grid">
+        <article class="english-hero ink-card">
+          <div><span class="seal">正式道境</span><h2 id="englishRealm">元婴圆满</h2><p>稳定战力 IELTS 6.5 · 下一境界：化神——稳定 7.0</p></div>
+          <div class="combat-stats">
+            <div><span>常态上限</span><strong>7.0</strong></div>
+            <div><span>听力峰值</span><strong>33<small>/40</small></strong></div>
+            <div><span>峰值战力</span><strong>7.5</strong></div>
+          </div>
+        </article>
+
+        <article class="panel span-2 english-xp-panel">
+          <div class="card-heading"><div><p class="eyebrow">英语修为 · E-XP</p><h3>元婴圆满 → 化神</h3></div><strong id="englishXpLabel" class="score-orb">45 / 1800</strong></div>
+          <div class="progress-track english-xp-track"><i id="englishXpProgress"></i></div>
+          <div class="english-xp-meta"><span>常规每日上限 75 · 模考日 100</span><span>修为即时入账，突破仍需通过稳定度试炼</span></div>
+          <p class="muted small">修为够但试炼没过：停留瓶颈期。试炼偶然高分但修为不足：临时爆种，不算突破。</p>
+        </article>
+
+        <article class="panel trial-result-card">
+          <div class="card-heading"><div><p class="eyebrow">入宗试炼一 · 已完成</p><h3>剑桥雅思 20 · Test 1</h3></div><span class="achievement-badge">听脉初证</span></div>
+          <div class="test-score"><strong>33</strong><span>/40<br />听力峰值约 7.5</span></div>
+          <div class="trial-meter"><span>化神稳定度试炼</span><b>1 / 5</b></div>
+          <p class="muted">语言理解已达高阶区间；稳定度、后程续航和漏听恢复尚未达标。</p>
+        </article>
+
+        <article class="panel bottleneck-card">
+          <p class="eyebrow">瓶颈锁定</p><h3>神识续航不足</h3>
+          <div class="endurance-line"><strong>15<small>分钟</small></strong><i></i><strong>30<small>分钟</small></strong></div>
+          <ul><li>超过 15 分钟后处理速度下降</li><li>追忆上一句导致连锁漏听</li><li>声音—拼写与音节表征不稳</li><li>目标：10 秒或一道题内接回语流</li></ul>
+          <blockquote><b>断尾诀</b>：漏掉一个，立即舍弃；呼气、移到下一题、预测关键词。</blockquote>
+        </article>
+
+        <article class="panel span-2 english-log-panel">
+          <div class="card-heading"><div><p class="eyebrow">今日英语修炼</p><h3>完成一轮，即时计入 E-XP</h3></div><span id="todayEnglishXp" class="subtle-tag">今日 0 / 75</span></div>
+          <div id="englishPracticeList" class="english-practice-list"></div>
+          <div class="mock-actions"><span>雅思试炼：</span><button data-mock-xp="20">Listening Section + 纠错 · 20</button><button data-mock-xp="35">完整听力 · 35</button><button data-mock-xp="60">完整听力 + 复盘 · 60</button><button data-mock-xp="100">四科模考 + 复盘 · 100</button></div>
+        </article>
+
+        <article class="panel span-2">
+          <div class="card-heading"><div><p class="eyebrow">入宗校准</p><h3>英语四试</h3></div><span id="englishTrialsDone" class="subtle-tag">1 / 4 完成</span></div>
+          <div id="englishTrials" class="english-trials"></div>
+        </article>
+
+        <article class="panel english-routine">
+          <p class="eyebrow">当前第一功法</p><h3>听脉四炼 · 25 分钟</h3>
+          <ol><li><b>一炼 · 盲听取意</b><span>3—8 分钟材料，不开字幕，不暂停；写主题、论证与卡点。</span></li><li><b>二炼 · 文本验伤</b><span>标记 P/S/V/L/A/C/G，找出失效的处理环节。</span></li><li><b>三炼 · 听脉重铸</b><span>精炼最难的 30—90 秒，模仿重音、节奏和音节压缩。</span></li><li><b>四炼 · 言灵复现</b><span>关闭文本，用自己的英语重组并复述内容。</span></li></ol>
+        </article>
+        <article class="panel english-routine">
+          <p class="eyebrow">每日 60 分钟听力模板</p><h3>续航、精听、拼写、输出</h3>
+          <ol><li><b>20 分钟连续听</b><span>不暂停、不回放；疲劳和漏听时使用断尾诀。</span></li><li><b>20 分钟语音精听</b><span>处理认识却没听出的词、弱读、连读和音节压缩。</span></li><li><b>10 分钟听写</b><span>只练 10 个词或短语，隔 10 分钟和次日复测。</span></li><li><b>10 分钟口头复述</b><span>复述内容结构、主要论点和个人判断。</span></li></ol>
+        </article>
+
+        <article class="panel span-2 endurance-panel">
+          <div class="card-heading"><div><p class="eyebrow">四周元婴炼神期</p><h3>渐进越过 15 分钟瓶颈</h3></div><span class="subtle-tag">目标不是不累，而是快速恢复</span></div>
+          <div class="endurance-steps"><div><em>第一周</em><strong>18 分钟</strong><span>越过原瓶颈</span></div><div><em>第二周</em><strong>22 分钟</strong><span>走神后重新接入</span></div><div><em>第三周</em><strong>26 分钟</strong><span>接近完整听力</span></div><div><em>第四周</em><strong>30 分钟</strong><span>全程不暂停回放</span></div></div>
+          <p class="muted small">每次记录首次疲劳分钟、是否连锁漏听、恢复所用秒数或题数、结束后能否复述。</p>
+        </article>
+
+        <article class="panel span-2 breakthrough-panel">
+          <div class="card-heading"><div><p class="eyebrow">双钥匙突破</p><h3>元婴圆满至问鼎</h3></div><span class="subtle-tag">稳定表现 + E-XP</span></div>
+          <div id="englishBreakthroughs" class="english-breakthroughs"></div>
+        </article>
+
+        <article class="panel span-2 ladder-panel"><div class="card-heading"><div><p class="eyebrow">完整道境对标</p><h3>英语境界天梯</h3></div><span class="subtle-tag">核心胜利：稳定 7.5 · 高阶冲刺：8.0</span></div><div id="englishLadder" class="english-ladder"></div></article>
+      </div>
+    </section>
+
+    <section id="history" class="view">
+      <div class="section-intro"><p class="eyebrow">每一日都算数</p><h2>修行簿</h2><p>今日复盘会写入这里；沉淀之后，可以追加二度复盘修正自己的判断。</p></div>
+      <div class="history-summary" id="historySummary"></div>
+      <article class="panel"><div id="historyList" class="history-list"></div></article>
+    </section>
+
+    <section id="settings" class="view">
+      <div class="section-intro"><p class="eyebrow">系统为人服务</p><h2>修炼设置</h2><p>所有阈值都是可调的。若计划不现实，改计划，不责罚自己。</p></div>
+      <div class="settings-grid">
+        <article class="panel settings-form">
+          <h3>基础信息</h3>
+          <label>修炼者称呼<input id="settingName" type="text" /></label>
+          <label>起修日期<input id="settingStart" type="date" /></label>
+          <label>考研成人礼<input id="settingExam" type="date" /></label>
+          <label>每日提醒时间<input id="settingReminder" type="time" /></label>
+          <button id="saveSettings" class="primary-btn">保存设置</button>
+        </article>
+        <article class="panel">
+          <h3>数据掌控</h3>
+          <p class="muted">本机会始终保留可用副本；登录后自动同步到你的私人云端档案。</p>
+          <div class="data-actions"><button id="exportData" class="ghost-btn">导出修行档案</button><label class="ghost-btn file-label">导入档案<input id="importData" type="file" accept="application/json" /></label><button id="resetData" class="danger-btn">清空全部记录</button></div>
+        </article>
+        <article class="panel span-2 cloud-settings-card">
+          <div><p class="eyebrow">跨端修行</p><h3>手机与电脑共用一份进度</h3><p id="cloudSettingsStatus" class="muted">当前为本机模式。连接账号后，任务、修为和复盘会自动同步。</p></div>
+          <div class="cloud-settings-actions"><button id="openCloudSettings" class="primary-btn">连接云端账号</button><button id="manualCloudSync" class="ghost-btn" hidden>立即同步</button></div>
+        </article>
+        <article class="panel span-2 principles">
+          <h3>三条不变的宗门戒律</h3>
+          <div><span>一</span><p><b>以真实能力增长为准</b>不为刷修为而学习。</p></div>
+          <div><span>二</span><p><b>计划服务于你</b>完不成时先诊断任务、环境与恢复。</p></div>
+          <div><span>三</span><p><b>可以降级执行</b>但不因一天失控就彻底弃疗。</p></div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <dialog id="checkinDialog" class="checkin-dialog">
+    <form method="dialog" id="checkinForm">
+      <div class="dialog-head"><div><p class="eyebrow">今日复盘与反思</p><h2>向自己说真话</h2></div><button value="cancel" class="close-btn" aria-label="关闭">×</button></div>
+      <div class="form-grid">
+        <fieldset><legend>睡眠与身心</legend><label>上床时间<input name="bedTime" type="time" value="23:00" /></label><label>起床时间<input name="wakeTime" type="time" value="07:30" /></label><label>今日能量（1—10）<input name="energy" type="number" min="1" max="10" value="6" /></label><label class="full">今日最大心魔<textarea name="challenge" placeholder="是什么让启动变得困难？"></textarea></label></fieldset>
+        <fieldset><legend>学习反思</legend><label class="full">今日真正的能力增长<textarea name="growth" placeholder="今天具体学会、理解或纠正了什么？"></textarea></label><label class="full">值得保留的做法<textarea name="worked" placeholder="什么方法、环境或安排有效？"></textarea></label><label class="full">明日唯一重点<textarea name="tomorrow" placeholder="明天最重要的一件事是什么？"></textarea></label></fieldset>
+        <fieldset><legend>道基与数字戒律</legend><label>运动分钟<input name="exerciseMinutes" type="number" min="0" value="0" /></label><label>读经祷告分钟<input name="prayerMinutes" type="number" min="0" value="0" /></label><label>社交媒体分钟<input name="socialMinutes" type="number" min="0" value="0" /></label><label>游戏分钟<input name="gameMinutes" type="number" min="0" value="0" /></label><label class="check full"><input name="phoneAway" type="checkbox" />专注期间手机不在手边</label><label class="check full"><input name="survivalMode" type="checkbox" />今日执行最低保命令</label></fieldset>
+      </div>
+      <div id="checkinPreview" class="checkin-preview"></div>
+      <div class="dialog-actions"><button value="cancel" class="ghost-btn">稍后再写</button><button id="saveCheckin" value="default" class="primary-btn">写入修行簿</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="customTaskDialog" class="checkin-dialog compact-dialog">
+    <form method="dialog" id="customTaskForm">
+      <div class="dialog-head"><div><p class="eyebrow">自定义修炼</p><h2>添加今日任务</h2></div><button value="cancel" class="close-btn" aria-label="关闭">×</button></div>
+      <div class="custom-task-form">
+        <label>任务名称<input name="name" type="text" required placeholder="例如：康德《纯粹理性批判》精读" /></label>
+        <label>修炼类型<select name="type"><option value="deep">深度 · 12修为/单元</option><option value="standard" selected>标准 · 10修为/单元</option><option value="light">轻度 · 6修为/单元</option><option value="foundation">道基任务 · 不增加修为</option></select></label>
+        <label>目标单元<input name="target" type="number" min="1" max="18" value="1" /></label>
+        <label>开始时间<input name="time" type="time" /></label>
+      </div>
+      <div class="dialog-actions"><button value="cancel" class="ghost-btn">取消</button><button id="saveCustomTask" value="default" class="primary-btn">加入今日修炼令</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="secondReviewDialog" class="checkin-dialog compact-dialog">
+    <form method="dialog" id="secondReviewForm">
+      <div class="dialog-head"><div><p class="eyebrow">二度复盘</p><h2 id="secondReviewTitle">重新审视这一天</h2></div><button value="cancel" class="close-btn" aria-label="关闭">×</button></div>
+      <input id="secondReviewDate" type="hidden" />
+      <label class="second-review-field">沉淀后的新判断<textarea id="secondReviewText" placeholder="哪些判断需要修正？真正的瓶颈是什么？下一次如何做得更好？"></textarea></label>
+      <div class="dialog-actions"><button value="cancel" class="ghost-btn">取消</button><button id="saveSecondReview" value="default" class="primary-btn">保存二度复盘</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="scheduleImportDialog" class="checkin-dialog schedule-import-dialog">
+    <form method="dialog" id="scheduleImportForm">
+      <div class="dialog-head"><div><p class="eyebrow">图表布令</p><h2>从课表或计划表生成任务</h2></div><button value="cancel" class="close-btn" aria-label="关闭">×</button></div>
+      <p class="privacy-note">图片只在当前设备识别，不上传、不写入修行档案。首次识别需要联网下载中文识别模型。</p>
+      <div class="schedule-upload-grid">
+        <label class="schedule-drop-zone" id="scheduleDropZone">
+          <input id="scheduleImageInput" type="file" accept="image/*" capture="environment" />
+          <span>拍照或选择图片</span><small>支持课表截图、手写清单照片和计划表</small>
+          <img id="scheduleImagePreview" alt="待识别图表预览" hidden />
+        </label>
+        <div class="ocr-workbench">
+          <div class="ocr-progress"><span id="ocrStatus">等待选择图片</span><strong id="ocrPercent">0%</strong></div>
+          <div class="meter"><i id="ocrProgressBar" style="width:0%"></i></div>
+          <label>识别文字（可手动修正）<textarea id="ocrRawText" placeholder="识别结果会出现在这里；也可以直接粘贴课表文字。"></textarea></label>
+          <div class="ocr-actions"><button id="recognizeSchedule" type="button" class="primary-btn" disabled>开始识别</button><button id="parseScheduleText" type="button" class="ghost-btn">按文字生成任务</button></div>
+        </div>
+      </div>
+      <div class="schedule-candidates-head"><div><h3>任务预览</h3><p class="muted">识别后仍可逐项修改，确认后才会加入今日修炼令。</p></div><span id="scheduleCandidateCount" class="subtle-tag">0 项</span></div>
+      <div id="scheduleCandidates" class="schedule-candidates"><p class="muted empty-candidates">尚未生成任务。</p></div>
+      <div class="dialog-actions"><button value="cancel" class="ghost-btn">取消</button><button id="importScheduleTasks" value="default" class="primary-btn" disabled>导入选中任务</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="cloudDialog" class="checkin-dialog compact-dialog">
+    <form method="dialog" id="cloudForm">
+      <div class="dialog-head"><div><p class="eyebrow">云端洞府</p><h2>跨设备同步修行档案</h2></div><button value="cancel" class="close-btn" aria-label="关闭">×</button></div>
+      <div id="cloudUnavailable" class="cloud-unavailable" hidden>云端服务尚未完成发布配置，本机数据仍会正常保存。</div>
+      <div id="cloudLoggedOut" class="cloud-auth-fields">
+        <label>邮箱<input id="cloudEmail" type="email" autocomplete="email" placeholder="name@example.com" /></label>
+        <label>密码<input id="cloudPassword" type="password" minlength="8" autocomplete="current-password" placeholder="至少 8 位" /></label>
+        <p class="muted">首次使用请选择“注册”。若启用了邮箱确认，请在邮件中完成确认后再登录。</p>
+        <div class="cloud-auth-actions"><button id="cloudSignIn" type="button" class="primary-btn">登录并同步</button><button id="cloudSignUp" type="button" class="ghost-btn">注册账号</button></div>
+      </div>
+      <div id="cloudLoggedIn" class="cloud-account" hidden>
+        <div><span>当前账号</span><strong id="cloudAccountEmail">—</strong></div>
+        <p id="cloudLastSync" class="muted">等待同步</p>
+        <div class="cloud-auth-actions"><button id="cloudSyncNow" type="button" class="primary-btn">立即同步</button><button id="cloudSignOut" type="button" class="ghost-btn">退出账号</button></div>
+      </div>
+      <p id="cloudDialogStatus" class="checkin-preview">本地优先：断网时照常使用，联网后自动同步。</p>
+    </form>
+  </dialog>
+
+  <script src="cloud-config.js"></script>
+  <script src="cloud-sync.js"></script>
+  <script src="vendor/tesseract.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

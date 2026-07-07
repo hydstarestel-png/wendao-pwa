@@ -346,3 +346,15 @@
     getStatus: () => ({ configured: configured(), loggedIn: !!session?.access_token, email: session?.user?.email || '', syncing }),
   };
 })();
+
+(() => {
+  function loadFeatureOverrides() {
+    if (document.querySelector('script[data-wendao-feature-overrides]')) return;
+    const script = document.createElement('script');
+    script.src = 'feature-overrides.js?v=20260707-foundation-reports-v1';
+    script.dataset.wendaoFeatureOverrides = 'true';
+    document.body.appendChild(script);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadFeatureOverrides, { once: true });
+  else loadFeatureOverrides();
+})();

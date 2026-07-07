@@ -1,5 +1,6 @@
 (() => {
   const SESSION_KEY = 'wendao-cloud-session-v1';
+  const REQUEST_TIMEOUT_MS = 15000;
   const config = window.WENDAO_CLOUD_CONFIG || {};
   let session = readSession();
   let syncing = false;
@@ -33,6 +34,11 @@
       syncing,
       ...extra,
     });
+    try {
+      const node = document.querySelector('#cloudDialogStatus');
+      if (node && extra.error) node.textContent = `同步失败：${extra.error}`;
+      else if (node && extra.lastSync) node.textContent = '当前进度已同步到云端。';
+    } catch {}
   }
 
   function headers(token = session?.access_token) {
@@ -87,8 +93,21 @@
     return data;
   }
 
+  async function request(url, options = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('云端请求超时，请检查网络后重试。');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   async function authRequest(path, body, query) {
-    const response = await fetch(authUrl(path, query), {
+    const response = await request(authUrl(path, query), {
       method: 'POST',
       headers: { apikey: config.supabaseAnonKey, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -97,7 +116,7 @@
   }
 
   async function fetchUser(token) {
-    return parseResponse(await fetch(authUrl('user'), { headers: headers(token) }));
+    return parseResponse(await request(authUrl('user'), { headers: headers(token) }));
   }
 
   async function restoreSessionFromUrl() {
@@ -127,7 +146,7 @@
       user: null,
     };
 
-    try { nextSession.user = await fetchUser(accessToken); } catch {}
+    nextSession.user = await fetchUser(accessToken);
     writeSession(nextSession);
     cleanAuthUrl();
     return true;
@@ -144,8 +163,9 @@
     if (!session?.access_token) return null;
     if ((session.expires_at || 0) < Date.now() + 60000) await refreshSession();
     if (session?.access_token && !session?.user?.id) {
-      try { writeSession({ ...session, user: await fetchUser(session.access_token) }); } catch {}
+      writeSession({ ...session, user: await fetchUser(session.access_token) });
     }
+    if (session?.access_token && !session?.user?.id) throw new Error('无法读取云端账号身份，请退出后重新登录。');
     return session;
   }
 
@@ -171,15 +191,15 @@
 
   async function fetchRemoteState() {
     await ensureSession();
-    if (!session?.user?.id) return null;
+    if (!session?.user?.id) throw new Error('无法读取云端账号身份，请退出后重新登录。');
     const url = `${config.supabaseUrl}/rest/v1/user_states?user_id=eq.${encodeURIComponent(session.user.id)}&select=state,updated_at&limit=1`;
-    const data = await parseResponse(await fetch(url, { headers: headers() }));
+    const data = await parseResponse(await request(url, { headers: headers() }));
     return data?.[0] || null;
   }
 
   async function pushState(state) {
     await ensureSession();
-    if (!session?.user?.id) return null;
+    if (!session?.user?.id) throw new Error('无法读取云端账号身份，请退出后重新登录。');
     const updatedAt = new Date().toISOString();
     const payloadState = JSON.parse(JSON.stringify(state));
     payloadState.syncMeta = {
@@ -188,7 +208,7 @@
       cloudUpdatedAt: updatedAt,
     };
     const url = `${config.supabaseUrl}/rest/v1/user_states?on_conflict=user_id`;
-    const response = await fetch(url, {
+    const response = await request(url, {
       method: 'POST',
       headers: { ...headers(), Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify([{ user_id: session.user.id, state: payloadState, updated_at: updatedAt }]),
@@ -204,7 +224,13 @@
   }
 
   async function sync(localState, { preferLocal = false } = {}) {
-    if (!configured() || !session?.access_token || syncing) return null;
+    if (!configured()) throw new Error('云端服务尚未完成配置。');
+    if (!session?.access_token) throw new Error('请先登录云端账号。');
+    if (syncing) {
+      const message = '已有同步正在进行，稍等几秒后再试。';
+      emitStatus({ error: message });
+      throw new Error(message);
+    }
     syncing = true;
     emitStatus();
     try {
@@ -235,6 +261,9 @@
 
       await pushState(localState);
       return { direction: 'push' };
+    } catch (error) {
+      emitStatus({ error: error.message });
+      throw error;
     } finally {
       syncing = false;
       emitStatus();

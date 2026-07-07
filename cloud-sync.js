@@ -223,6 +223,27 @@
     return (state?.totalXp || 0) > 45 || Object.keys(state?.records || {}).length > 0 || Object.keys(state?.customTasks || {}).length > 0;
   }
 
+  function comparableState(value) {
+    const copy = JSON.parse(JSON.stringify(value || {}));
+    delete copy.syncMeta;
+    return copy;
+  }
+
+  function statesDiffer(a, b) {
+    return JSON.stringify(comparableState(a)) !== JSON.stringify(comparableState(b));
+  }
+
+  function applyRemoteState(remote) {
+    const remoteTime = remote.updated_at || new Date().toISOString();
+    const incoming = {
+      ...remote.state,
+      syncMeta: { ...(remote.state?.syncMeta || {}), localUpdatedAt: remoteTime, cloudUpdatedAt: remoteTime },
+    };
+    emit('wendao-cloud-state', { state: incoming, updatedAt: remoteTime });
+    emitStatus({ lastSync: remoteTime });
+    return { direction: 'pull' };
+  }
+
   async function sync(localState, { preferLocal = false } = {}) {
     if (!configured()) throw new Error('云端服务尚未完成配置。');
     if (!session?.access_token) throw new Error('请先登录云端账号。');
@@ -240,23 +261,32 @@
         return { direction: 'push' };
       }
 
-      const localKnown = localState?.syncMeta?.cloudUpdatedAt;
+      const localKnown = localState?.syncMeta?.cloudUpdatedAt || '';
       const localChanged = localState?.syncMeta?.localUpdatedAt || '';
       const remoteTime = remote.updated_at || '';
-      let useRemote = !preferLocal && remoteTime > localChanged;
+      const remoteChanged = !!remoteTime && remoteTime !== localKnown && remoteTime > localKnown;
+      const localChangedAfterCloud = !!localChanged && (!localKnown || localChanged > localKnown);
+      const different = statesDiffer(remote.state, localState);
 
-      if (!localKnown && hasMeaningfulProgress(localState) && JSON.stringify(remote.state) !== JSON.stringify(localState)) {
-        useRemote = confirm('云端与本机都有修行档案。\n\n确定：使用云端档案覆盖本机。\n取消：使用本机档案覆盖云端。');
+      if (!different && remoteTime) {
+        emitStatus({ lastSync: remoteTime });
+        return { direction: 'noop' };
       }
 
-      if (useRemote) {
-        const incoming = {
-          ...remote.state,
-          syncMeta: { ...(remote.state?.syncMeta || {}), localUpdatedAt: remoteTime, cloudUpdatedAt: remoteTime },
-        };
-        emit('wendao-cloud-state', { state: incoming, updatedAt: remoteTime });
-        emitStatus({ lastSync: remoteTime });
-        return { direction: 'pull' };
+      if (remoteChanged && !preferLocal) {
+        if (localChangedAfterCloud && hasMeaningfulProgress(localState)) {
+          const useRemote = confirm('云端和本机都有新进度。\n\n确定：使用云端档案覆盖本机。\n取消：使用本机档案覆盖云端。');
+          if (!useRemote) {
+            await pushState(localState);
+            return { direction: 'push' };
+          }
+        }
+        return applyRemoteState(remote);
+      }
+
+      if (remoteChanged && preferLocal && localChangedAfterCloud && hasMeaningfulProgress(localState)) {
+        const useRemote = confirm('云端已有另一台设备的新进度。\n\n确定：先载入云端档案。\n取消：用本机档案覆盖云端。');
+        if (useRemote) return applyRemoteState(remote);
       }
 
       await pushState(localState);

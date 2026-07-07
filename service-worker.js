@@ -1,4 +1,4 @@
-const CACHE_NAME='wendao-pwa-v7';
+const CACHE_NAME='wendao-pwa-v8';
 const APP_SHELL=['./','./index.html','./styles.css','./app.js','./cloud-config.js','./cloud-sync.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./vendor/tesseract.min.js','./vendor/worker.min.js'];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE_NAME).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE_NAME).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));});

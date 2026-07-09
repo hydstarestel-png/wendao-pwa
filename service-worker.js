@@ -1,4 +1,4 @@
-const CACHE_NAME='wendao-pwa-v11';
+const CACHE_NAME='wendao-pwa-v12';
 const STUDY_TIME_VERSION='20260709-study-time-addon-v1';
 const APP_SHELL=['./','./index.html','./styles.css','./app.js','./cloud-config.js','./cloud-sync.js','./feature-overrides.js','./study-time-overrides.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./vendor/tesseract.min.js','./vendor/worker.min.js'];
 function featureResponseWithStudyTime(source){

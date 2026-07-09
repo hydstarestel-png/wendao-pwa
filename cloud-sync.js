@@ -6,6 +6,7 @@
   let syncing = false;
   let pushTimer = null;
   let pendingState = null;
+  let lastStatus = {};
 
   function configured() {
     return /^https:\/\//.test(config.supabaseUrl || '') && String(config.supabaseAnonKey || '').length > 20;
@@ -27,18 +28,82 @@
   }
 
   function emitStatus(extra = {}) {
-    emit('wendao-cloud-status', {
+    const detail = {
       configured: configured(),
       loggedIn: !!session?.access_token,
       email: session?.user?.email || '',
       syncing,
       ...extra,
-    });
+    };
+    lastStatus = detail;
+    emit('wendao-cloud-status', detail);
+    setTimeout(() => applyCloudStatusHints(detail), 0);
     try {
       const node = document.querySelector('#cloudDialogStatus');
       if (node && extra.error) node.textContent = `同步失败：${extra.error}`;
+      else if (node && extra.pending) node.textContent = '有本机新进度待同步，正在自动上传云端。';
+      else if (node && syncing) node.textContent = '正在同步云端档案…';
       else if (node && extra.lastSync) node.textContent = '当前进度已同步到云端。';
     } catch {}
+  }
+
+  function applyCloudStatusHints(status = lastStatus) {
+    try {
+      if (!status?.loggedIn) return;
+      const button = document.querySelector('#cloudStatusBtn');
+      const label = document.querySelector('#cloudStatusText');
+      const settings = document.querySelector('#cloudSettingsStatus');
+      const dialog = document.querySelector('#cloudDialog');
+      const dialogStatus = document.querySelector('#cloudDialogStatus');
+      if (button) button.classList.toggle('syncing', !!status.syncing || !!status.pending);
+      if (label) label.textContent = status.syncing ? '同步中' : status.pending ? '待同步' : '云端已连';
+      if (settings && status.pending) settings.textContent = `已连接 ${status.email || '云端账号'}，有本机新进度待同步。`;
+      if (dialog?.open && dialogStatus) {
+        if (status.pending) dialogStatus.textContent = '有本机新进度待同步，通常几秒内自动完成。';
+        else if (status.syncing) dialogStatus.textContent = '正在同步云端档案…';
+      }
+    } catch {}
+  }
+
+  function setCloudButtonsBusy(busy) {
+    try {
+      ['#cloudSyncNow', '#manualCloudSync'].forEach((selector) => {
+        const node = document.querySelector(selector);
+        if (node) node.disabled = busy;
+      });
+    } catch {}
+  }
+
+  function enhanceManualSyncButtons() {
+    const handler = async (event) => {
+      const status = window.WendaoCloud?.getStatus?.();
+      if (!status?.pending || !window.WendaoCloud?.flushPendingPush) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const statusNode = document.querySelector('#cloudDialogStatus');
+      if (statusNode) statusNode.textContent = '正在同步待同步任务进度…';
+      setCloudButtonsBusy(true);
+      try {
+        const result = await window.WendaoCloud.flushPendingPush();
+        const message = result?.direction === 'busy'
+          ? '已有同步正在进行，稍等几秒后再试。'
+          : result?.direction === 'error'
+            ? `同步失败：${result.error?.message || '请稍后重试'}`
+            : '待同步任务进度已同步到云端。';
+        if (statusNode) statusNode.textContent = message;
+        window.toast?.(message);
+      } finally {
+        setCloudButtonsBusy(false);
+        setTimeout(() => applyCloudStatusHints(window.WendaoCloud?.getStatus?.()), 0);
+      }
+    };
+    ['#cloudSyncNow', '#manualCloudSync'].forEach((selector) => {
+      const node = document.querySelector(selector);
+      if (node && !node.dataset.wendaoPendingSyncHooked) {
+        node.dataset.wendaoPendingSyncHooked = 'true';
+        node.addEventListener('click', handler, true);
+      }
+    });
   }
 
   function headers(token = session?.access_token) {
@@ -350,6 +415,9 @@
   });
   window.addEventListener('pagehide', flushPendingPush);
   window.addEventListener('online', flushPendingPush);
+  window.addEventListener('wendao-cloud-status', (event) => setTimeout(() => applyCloudStatusHints(event.detail), 0));
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhanceManualSyncButtons, { once: true });
+  else enhanceManualSyncButtons();
 
   window.WendaoCloud = {
     configured,

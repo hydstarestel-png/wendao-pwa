@@ -304,20 +304,30 @@
     if (!configured() || !session?.access_token) return;
     pendingState = JSON.parse(JSON.stringify(state));
     clearTimeout(pushTimer);
-    pushTimer = setTimeout(async () => {
-      const next = pendingState;
-      pendingState = null;
-      try {
-        syncing = true;
-        emitStatus();
-        await pushState(next);
-      } catch (error) {
-        emitStatus({ error: error.message });
-      } finally {
-        syncing = false;
-        emitStatus();
-      }
-    }, 900);
+    pushTimer = setTimeout(flushPendingPush, 900);
+    emitStatus({ pending: true });
+  }
+
+  async function flushPendingPush() {
+    if (!configured() || !session?.access_token || !pendingState) return { direction: 'noop' };
+    if (syncing) {
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(flushPendingPush, 1200);
+      emitStatus({ pending: true });
+      return { direction: 'busy' };
+    }
+    clearTimeout(pushTimer);
+    const next = pendingState;
+    pendingState = null;
+    try {
+      const result = await sync(next, { preferLocal: true });
+      emitStatus({ pending: !!pendingState });
+      return result;
+    } catch (error) {
+      pendingState = pendingState || next;
+      emitStatus({ error: error.message, pending: true });
+      return { direction: 'error', error };
+    }
   }
 
   async function bootstrap() {
@@ -335,6 +345,12 @@
     }
   }
 
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPendingPush();
+  });
+  window.addEventListener('pagehide', flushPendingPush);
+  window.addEventListener('online', flushPendingPush);
+
   window.WendaoCloud = {
     configured,
     signIn,
@@ -342,8 +358,9 @@
     signOut,
     sync,
     schedulePush,
+    flushPendingPush,
     bootstrap,
-    getStatus: () => ({ configured: configured(), loggedIn: !!session?.access_token, email: session?.user?.email || '', syncing }),
+    getStatus: () => ({ configured: configured(), loggedIn: !!session?.access_token, email: session?.user?.email || '', syncing, pending: !!pendingState }),
   };
 })();
 

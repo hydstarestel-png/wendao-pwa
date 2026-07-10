@@ -1,12 +1,17 @@
 (() => {
   const SESSION_KEY = 'wendao-cloud-session-v1';
   const REQUEST_TIMEOUT_MS = 15000;
+  const SYNC_WATCHDOG_MS = 30000;
   const config = window.WENDAO_CLOUD_CONFIG || {};
   let session = readSession();
   let syncing = false;
+  let syncStartedAt = 0;
+  let syncWatchdogTimer = null;
+  let syncRunId = 0;
   let pushTimer = null;
   let pendingState = null;
   let lastStatus = {};
+  const activeRequests = new Set();
 
   function configured() {
     return /^https:\/\//.test(config.supabaseUrl || '') && String(config.supabaseAnonKey || '').length > 20;
@@ -72,6 +77,51 @@
         if (node) node.disabled = busy;
       });
     } catch {}
+  }
+
+  function abortActiveRequests() {
+    activeRequests.forEach((controller) => {
+      try { controller.abort(); } catch {}
+    });
+    activeRequests.clear();
+  }
+
+  function stopSyncWatchdog() {
+    clearTimeout(syncWatchdogTimer);
+    syncWatchdogTimer = null;
+    syncStartedAt = 0;
+  }
+
+  function forceUnlock(reason = 'timeout') {
+    if (!syncing) {
+      emitStatus({ pending: !!pendingState });
+      return { unlocked: false };
+    }
+    syncRunId += 1;
+    abortActiveRequests();
+    syncing = false;
+    stopSyncWatchdog();
+    setCloudButtonsBusy(false);
+    const message = reason === 'manual'
+      ? '已解除卡住的同步状态，请重新点击同步。'
+      : reason === 'stale'
+        ? '检测到上次同步未正常结束，已自动恢复。'
+        : '云端同步超时，已自动解锁；请重新点击同步。';
+    emitStatus({ error: message, pending: !!pendingState });
+    try { window.toast?.(message); } catch {}
+    return { unlocked: true };
+  }
+
+  function startSyncWatchdog(runId) {
+    clearTimeout(syncWatchdogTimer);
+    syncStartedAt = Date.now();
+    syncWatchdogTimer = setTimeout(() => {
+      if (syncing && runId === syncRunId) forceUnlock('timeout');
+    }, SYNC_WATCHDOG_MS);
+  }
+
+  function isSyncStale() {
+    return syncing && syncStartedAt && Date.now() - syncStartedAt > SYNC_WATCHDOG_MS;
   }
 
   function enhanceManualSyncButtons() {
@@ -161,6 +211,7 @@
   async function request(url, options = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    activeRequests.add(controller);
     try {
       return await fetch(url, { ...options, signal: controller.signal });
     } catch (error) {
@@ -168,6 +219,7 @@
       throw error;
     } finally {
       clearTimeout(timer);
+      activeRequests.delete(controller);
     }
   }
 
@@ -251,6 +303,7 @@
   function signOut() {
     clearTimeout(pushTimer);
     pendingState = null;
+    if (syncing) forceUnlock('manual');
     writeSession(null);
   }
 
@@ -312,12 +365,16 @@
   async function sync(localState, { preferLocal = false } = {}) {
     if (!configured()) throw new Error('云端服务尚未完成配置。');
     if (!session?.access_token) throw new Error('请先登录云端账号。');
+    if (isSyncStale()) forceUnlock('stale');
     if (syncing) {
       const message = '已有同步正在进行，稍等几秒后再试。';
       emitStatus({ error: message });
       throw new Error(message);
     }
+    const runId = ++syncRunId;
     syncing = true;
+    startSyncWatchdog(runId);
+    setCloudButtonsBusy(true);
     emitStatus();
     try {
       const remote = await fetchRemoteState();
@@ -357,11 +414,16 @@
       await pushState(localState);
       return { direction: 'push' };
     } catch (error) {
+      if (runId !== syncRunId) throw new Error('云端同步已自动解锁，请重新点击同步。');
       emitStatus({ error: error.message });
       throw error;
     } finally {
-      syncing = false;
-      emitStatus();
+      if (runId === syncRunId) {
+        syncing = false;
+        stopSyncWatchdog();
+        setCloudButtonsBusy(false);
+        emitStatus({ pending: !!pendingState });
+      }
     }
   }
 
@@ -375,6 +437,9 @@
 
   async function flushPendingPush() {
     if (!configured() || !session?.access_token || !pendingState) return { direction: 'noop' };
+    if (syncing) {
+      if (isSyncStale()) forceUnlock('stale');
+    }
     if (syncing) {
       clearTimeout(pushTimer);
       pushTimer = setTimeout(flushPendingPush, 1200);
@@ -415,6 +480,13 @@
   });
   window.addEventListener('pagehide', flushPendingPush);
   window.addEventListener('online', flushPendingPush);
+  window.addEventListener('focus', () => {
+    if (isSyncStale()) forceUnlock('stale');
+    if (pendingState) flushPendingPush();
+  });
+  window.addEventListener('pageshow', () => {
+    if (isSyncStale()) forceUnlock('stale');
+  });
   window.addEventListener('wendao-cloud-status', (event) => setTimeout(() => applyCloudStatusHints(event.detail), 0));
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enhanceManualSyncButtons, { once: true });
   else enhanceManualSyncButtons();
@@ -427,8 +499,9 @@
     sync,
     schedulePush,
     flushPendingPush,
+    forceUnlock: () => forceUnlock('manual'),
     bootstrap,
-    getStatus: () => ({ configured: configured(), loggedIn: !!session?.access_token, email: session?.user?.email || '', syncing, pending: !!pendingState }),
+    getStatus: () => ({ configured: configured(), loggedIn: !!session?.access_token, email: session?.user?.email || '', syncing, pending: !!pendingState, syncStartedAt }),
   };
 })();
 

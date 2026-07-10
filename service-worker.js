@@ -1,7 +1,7 @@
-const CACHE_NAME='wendao-pwa-v14';
+const CACHE_NAME='wendao-pwa-v15';
 const STUDY_TIME_VERSION='20260709-study-time-addon-v1';
 const CLARITY_VERSION='20260709-clarity-ledger-v2';
-const APP_SHELL=['./','./index.html','./styles.css','./app.js','./cloud-config.js','./cloud-sync.js','./feature-overrides.js','./study-time-overrides.js','./clarity-overrides.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./vendor/tesseract.min.js','./vendor/worker.min.js'];
+const APP_SHELL=['./','./index.html','./styles.css','./app.js','./cloud-config.js','./cloud-sync.js','./feature-overrides.js','./study-time-overrides.js','./clarity-overrides.js','./feedback-overrides.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./vendor/tesseract.min.js','./vendor/worker.min.js'];
 function featureResponseWithStudyTime(source){
   const loader=`\n;(()=>{if(document.querySelector('script[data-wendao-study-time]'))return;const script=document.createElement('script');script.src='study-time-overrides.js?v=${STUDY_TIME_VERSION}';script.dataset.wendaoStudyTime='true';document.body.appendChild(script);})();\n;(()=>{if(document.querySelector('script[data-wendao-clarity]'))return;const script=document.createElement('script');script.src='clarity-overrides.js?v=${CLARITY_VERSION}';script.dataset.wendaoClarity='true';document.body.appendChild(script);})();\n`;
   return new Response(`${source}\n${loader}`,{headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'no-cache'}});

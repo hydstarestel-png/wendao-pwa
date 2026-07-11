@@ -547,14 +547,4 @@
   };
 })();
 
-(() => {
-  function loadFeatureOverrides() {
-    if (document.querySelector('script[data-wendao-feature-overrides]')) return;
-    const script = document.createElement('script');
-    script.src = 'feature-overrides.js?v=20260707-foundation-reports-v1';
-    script.dataset.wendaoFeatureOverrides = 'true';
-    document.body.appendChild(script);
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', loadFeatureOverrides, { once: true });
-  else loadFeatureOverrides();
-})();
+// Optional enhancement bundles are intentionally paused in v20.\n// The core application and the local archive must always start even if an\n// experimental reporting extension has a browser-specific syntax failure.\n

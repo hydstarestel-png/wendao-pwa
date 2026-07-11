@@ -10,6 +10,7 @@
   let syncRunId = 0;
   let pushTimer = null;
   let pendingState = null;
+  let pendingConflict = null;
   let lastStatus = {};
   const activeRequests = new Set();
 
@@ -38,6 +39,7 @@
       loggedIn: !!session?.access_token,
       email: session?.user?.email || '',
       syncing,
+      conflict: !!pendingConflict,
       ...extra,
     };
     lastStatus = detail;
@@ -61,7 +63,7 @@
       const dialog = document.querySelector('#cloudDialog');
       const dialogStatus = document.querySelector('#cloudDialogStatus');
       if (button) button.classList.toggle('syncing', !!status.syncing || !!status.pending);
-      if (label) label.textContent = status.syncing ? '同步中' : status.pending ? '待同步' : '云端已连';
+      if (label) label.textContent = status.syncing ? '同步中' : status.conflict ? '待选择' : status.pending ? '待同步' : '云端已连';
       if (settings && status.pending) settings.textContent = `已连接 ${status.email || '云端账号'}，有本机新进度待同步。`;
       if (dialog?.open && dialogStatus) {
         if (status.pending) dialogStatus.textContent = '有本机新进度待同步，通常几秒内自动完成。';
@@ -303,6 +305,7 @@
   function signOut() {
     clearTimeout(pushTimer);
     pendingState = null;
+    pendingConflict = null;
     if (syncing) forceUnlock('manual');
     writeSession(null);
   }
@@ -352,6 +355,9 @@
   }
 
   function applyRemoteState(remote) {
+    clearTimeout(pushTimer);
+    pendingState = null;
+    pendingConflict = null;
     const remoteTime = remote.updated_at || new Date().toISOString();
     const incoming = {
       ...remote.state,
@@ -362,7 +368,20 @@
     return { direction: 'pull' };
   }
 
-  async function sync(localState, { preferLocal = false } = {}) {
+  function createConflict(remote, localState) {
+    pendingConflict = {
+      remote,
+      localState: JSON.parse(JSON.stringify(localState || {})),
+    };
+    emit('wendao-cloud-conflict', {
+      remoteUpdatedAt: remote.updated_at || '',
+      localUpdatedAt: localState?.syncMeta?.localUpdatedAt || '',
+    });
+    emitStatus({ conflict: true, pending: !!pendingState });
+    return { direction: 'conflict' };
+  }
+
+  async function sync(localState, { preferLocal = false, forceLocal = false } = {}) {
     if (!configured()) throw new Error('云端服务尚未完成配置。');
     if (!session?.access_token) throw new Error('请先登录云端账号。');
     if (isSyncStale()) forceUnlock('stale');
@@ -377,6 +396,13 @@
     setCloudButtonsBusy(true);
     emitStatus();
     try {
+      if (forceLocal) {
+        pendingConflict = null;
+        pendingState = null;
+        await pushState(localState);
+        return { direction: 'push' };
+      }
+      if (pendingConflict) return { direction: 'conflict' };
       const remote = await fetchRemoteState();
       if (!remote) {
         await pushState(localState);
@@ -395,20 +421,16 @@
         return { direction: 'noop' };
       }
 
+      if (remoteChanged && localChangedAfterCloud && hasMeaningfulProgress(localState)) {
+        return createConflict(remote, localState);
+      }
+
       if (remoteChanged && !preferLocal) {
-        if (localChangedAfterCloud && hasMeaningfulProgress(localState)) {
-          const useRemote = confirm('云端和本机都有新进度。\n\n确定：使用云端档案覆盖本机。\n取消：使用本机档案覆盖云端。');
-          if (!useRemote) {
-            await pushState(localState);
-            return { direction: 'push' };
-          }
-        }
         return applyRemoteState(remote);
       }
 
-      if (remoteChanged && preferLocal && localChangedAfterCloud && hasMeaningfulProgress(localState)) {
-        const useRemote = confirm('云端已有另一台设备的新进度。\n\n确定：先载入云端档案。\n取消：用本机档案覆盖云端。');
-        if (useRemote) return applyRemoteState(remote);
+      if (remoteChanged && preferLocal) {
+        return applyRemoteState(remote);
       }
 
       await pushState(localState);
@@ -427,6 +449,17 @@
     }
   }
 
+  async function resolveConflict(choice) {
+    if (!pendingConflict) return { direction: 'noop' };
+    const conflict = pendingConflict;
+    pendingConflict = null;
+    emitStatus({ conflict: false, pending: !!pendingState });
+    if (choice === 'remote') return applyRemoteState(conflict.remote);
+    const latestLocal = pendingState || conflict.localState;
+    pendingState = null;
+    return sync(latestLocal, { forceLocal: true });
+  }
+
   function schedulePush(state) {
     if (!configured() || !session?.access_token) return;
     pendingState = JSON.parse(JSON.stringify(state));
@@ -437,6 +470,10 @@
 
   async function flushPendingPush() {
     if (!configured() || !session?.access_token || !pendingState) return { direction: 'noop' };
+    if (pendingConflict) {
+      emitStatus({ conflict: true, pending: true });
+      return { direction: 'conflict' };
+    }
     if (syncing) {
       if (isSyncStale()) forceUnlock('stale');
     }
@@ -499,9 +536,10 @@
     sync,
     schedulePush,
     flushPendingPush,
+    resolveConflict,
     forceUnlock: () => forceUnlock('manual'),
     bootstrap,
-    getStatus: () => ({ configured: configured(), loggedIn: !!session?.access_token, email: session?.user?.email || '', syncing, pending: !!pendingState, syncStartedAt }),
+    getStatus: () => ({ configured: configured(), loggedIn: !!session?.access_token, email: session?.user?.email || '', syncing, pending: !!pendingState, conflict: !!pendingConflict, syncStartedAt }),
   };
 })();
 

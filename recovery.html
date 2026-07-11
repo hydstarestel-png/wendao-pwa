@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>问道台 · 档案救援</title>
+  <style>
+    :root{color-scheme:dark;--bg:#071512;--panel:#0e231d;--line:#275044;--jade:#74dfaa;--gold:#e1c075;--muted:#9aafa5}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 80% 0,rgba(116,223,170,.12),transparent 35%),var(--bg);color:#e4eee9;font:15px system-ui,"Microsoft YaHei",sans-serif}.shell{width:min(760px,calc(100% - 32px));margin:0 auto;padding:56px 0}.eyebrow{color:var(--gold);letter-spacing:.16em;font-size:12px}.panel{margin-top:20px;padding:22px;border:1px solid var(--line);border-radius:18px;background:rgba(14,35,29,.88);box-shadow:0 20px 60px rgba(0,0,0,.25)}h1{margin:10px 0;font:36px "STKaiti","KaiTi",serif;color:var(--jade)}p{line-height:1.7;color:var(--muted)}.archive{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center}.archive+.archive{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}.archive b,.archive span{display:block}.archive b{font-size:16px}.archive span{margin-top:5px;color:var(--muted);font-size:13px}.actions{display:flex;flex-wrap:wrap;gap:9px;justify-content:flex-end}button,a{border:1px solid rgba(116,223,170,.35);border-radius:10px;background:rgba(116,223,170,.08);color:#c9f3da;padding:9px 12px;text-decoration:none;font:13px inherit;cursor:pointer}button.secondary{border-color:rgba(225,192,117,.38);background:rgba(225,192,117,.07);color:#f0d99b}button:disabled{opacity:.45;cursor:not-allowed}.notice{border-left:3px solid var(--gold);padding:10px 13px;background:rgba(225,192,117,.06);border-radius:0 10px 10px 0}.status{margin-top:14px;min-height:24px;color:#caead8;font-size:13px}@media(max-width:560px){.shell{padding-top:28px}.archive{grid-template-columns:1fr}.actions{justify-content:flex-start}h1{font-size:30px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="eyebrow">问道台 · 独立档案救援</div>
+    <h1>先救档案，再修界面</h1>
+    <p>这个页面不加载问道台主程序、不连接云端、不改动任何数据。它只检查当前 Chrome 中是否还保存着你的本机档案，并让你先导出一份安全副本。</p>
+    <section class="panel">
+      <div class="notice">先点击每份“导出”。只有确认导出完成后，才考虑“恢复为主档案”。</div>
+      <div id="archives"></div>
+      <div id="status" class="status"></div>
+    </section>
+    <p><a href="./?recovery=after-backup">返回问道台</a></p>
+  </main>
+  <script>
+    (() => {
+      const archives = [
+        ['wendao-cultivation-v1', '当前主档案'],
+        ['wendao-cultivation-backup-v1', '上一版本地备份'],
+        ['wendao-cultivation-pre-cloud-v1', '云端覆盖前备份'],
+      ];
+      const box = document.querySelector('#archives');
+      const status = document.querySelector('#status');
+      const read = key => { try { const raw = localStorage.getItem(key); return raw ? { raw, data: JSON.parse(raw) } : null; } catch (error) { return { error }; } };
+      const detail = value => {
+        if (!value) return '未找到';
+        if (value.error) return '内容无法读取';
+        const data = value.data || {}, records = Object.keys(data.records || {}).length, tasks = Object.values(data.customTasks || {}).reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0);
+        return `${value.raw.length.toLocaleString()} 字节 · 修为 ${Number(data.totalXp || 0)} · ${records} 篇复盘 · ${tasks} 项自定义任务`;
+      };
+      function download(key, value) {
+        if (!value?.raw) return;
+        const blob = new Blob([value.raw], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob); link.download = `问道台-救援-${key}-${new Date().toLocaleDateString('sv-SE')}.json`; link.click(); URL.revokeObjectURL(link.href);
+        status.textContent = `${key} 已导出。请确认浏览器下载完成。`;
+      }
+      function restore(key, value) {
+        if (!value?.raw) return;
+        if (!confirm(`将“${key}”恢复为主档案？当前主档案会先保留为恢复前备份。`)) return;
+        const current = localStorage.getItem('wendao-cultivation-v1');
+        if (current) localStorage.setItem('wendao-cultivation-before-recovery-v1', current);
+        localStorage.setItem('wendao-cultivation-v1', value.raw);
+        status.textContent = '恢复完成。现在可以返回问道台检查数据。';
+      }
+      archives.forEach(([key, label]) => {
+        const value = read(key), row = document.createElement('div'); row.className = 'archive';
+        row.innerHTML = `<div><b>${label}</b><span>${detail(value)}</span></div><div class="actions"><button data-export="${key}" ${value?.raw ? '' : 'disabled'}>导出</button>${key !== 'wendao-cultivation-v1' ? `<button class="secondary" data-restore="${key}" ${value?.raw ? '' : 'disabled'}>恢复为主档案</button>` : ''}</div>`;
+        row.querySelector('[data-export]')?.addEventListener('click', () => download(key, value));
+        row.querySelector('[data-restore]')?.addEventListener('click', () => restore(key, value));
+        box.appendChild(row);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'wendao-cultivation-v1';
+const BACKUP_KEY = 'wendao-cultivation-backup-v1';
 const todayKey = () => new Date().toLocaleDateString('sv-SE');
 const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
@@ -78,14 +79,14 @@ function upgradeState(raw, applyProgress=true){
 }
 function loadState(){
   try{
-    const text=localStorage.getItem(STORAGE_KEY);
+    const text=localStorage.getItem(STORAGE_KEY)||localStorage.getItem(BACKUP_KEY);
     if(!text)return defaultState();
     const upgraded=upgradeState(JSON.parse(text),true);
     localStorage.setItem(STORAGE_KEY,JSON.stringify(upgraded));
     return upgraded;
   }catch{return defaultState();}
 }
-function saveState(options={}){ state.syncMeta={...(state.syncMeta||{}),localUpdatedAt:new Date().toISOString()};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));if(options.cloud!==false)window.WendaoCloud?.schedulePush(state); }
+function saveState(options={}){ state.syncMeta={...(state.syncMeta||{}),localUpdatedAt:new Date().toISOString()};const previous=localStorage.getItem(STORAGE_KEY);if(previous)localStorage.setItem(BACKUP_KEY,previous);localStorage.setItem(STORAGE_KEY,JSON.stringify(state));if(options.cloud!==false)window.WendaoCloud?.schedulePush(state); }
 function persistCloudState(){localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}
 function daysSinceStart(){ const start = new Date(state.profile.startDate + 'T00:00:00'); return Math.max(1, Math.floor((new Date().setHours(0,0,0,0)-start)/86400000)+1); }
 function phaseInfo(){ const d=daysSinceStart(); if(d<=7)return{n:1,label:'第一阶段 · 前 7 天',game:90,social:60,units:10,hours:5}; if(d<=14)return{n:2,label:'第二周 · 立稳道基',game:60,social:45,units:12,hours:6}; if(d<=21)return{n:3,label:'第三周 · 增长耐力',game:60,social:45,units:14,hours:7}; return{n:4,label:'完全体 · 稳态修炼',game:60,social:30,units:16,hours:8}; }
@@ -212,9 +213,7 @@ function normalizeChartTime(value){const parts=String(value||'').replace('：','
 function inferTaskType(name){if(/运动|跑步|健身|散步|祷告|读经|礼拜|睡眠|起床|休息/.test(name))return'foundation';if(/精读|论文|写作|模考|真题|专业课|论述|深度|考试/.test(name))return'deep';if(/背词|单词|整理|复盘|预习|计划|回顾|朗读/.test(name))return'light';return'standard';}
 function parseChartText(text){
   const timePattern=/(?:[01]?\d|2[0-3])[:：][0-5]\d/g,rangePattern=/((?:[01]?\d|2[0-3])[:：][0-5]\d)\s*(?:-|—|~|～|至)\s*((?:[01]?\d|2[0-3])[:：][0-5]\d)/;
-  const ignored=/^(星期|周)[一二三四五六日天]$|^(时间|节次|上午|下午|晚上|课程|任务|备注)$/;
-  const seen=new Set(),items=[];
-  String(text||'').split(/\r?\n/).map(line=>line.replace(/[|｜]+/g…3245 tokens truncated…L=records.length?records.map(([k,r])=>{
+  const ignored=/^(星期|周)[…3296 tokens truncated…records.map(([k,r])=>{
     const reflections=[r.growth&&`<div><b>能力增长</b><p>${escapeHtml(r.growth)}</p></div>`,r.challenge&&`<div><b>最大心魔</b><p>${escapeHtml(r.challenge)}</p></div>`,r.worked&&`<div><b>保留做法</b><p>${escapeHtml(r.worked)}</p></div>`,r.tomorrow&&`<div><b>明日重点</b><p>${escapeHtml(r.tomorrow)}</p></div>`].filter(Boolean).join('');
     const second=typeof r.secondReview==='string'?r.secondReview:r.secondReview?.text;
     return `<div class="history-entry"><div class="history-entry-head"><div class="history-date"><strong>${k.slice(5).replace('-','月')}日</strong><span>${r.survivalMode?'最低保命日':'正常修炼日'}</span></div><strong>＋${r.xp||0} 修为</strong></div><div class="history-bars"><div class="micro-bar"><i style="width:${clamp((r.xp||0)/180*100,0,100)}%"></i></div><small class="muted">${r.units||0} 单元 · 道基 ${r.foundationScore||0}/4 · 能量 ${r.energy||0}/10</small></div>${reflections?`<div class="reflection-grid">${reflections}</div>`:'<p class="muted history-empty-reflection">本日只有旧版结算记录，尚未填写文字复盘。</p>'}${second?`<div class="second-review-note"><b>二度复盘</b><p>${escapeHtml(second)}</p>${r.secondReview?.updatedAt?`<small>${escapeHtml(r.secondReview.updatedAt)} 更新</small>`:''}</div>`:''}<button class="ghost-btn second-review-btn" data-second-review="${k}">${second?'编辑二度复盘':'追加二度复盘'}</button></div>`;
@@ -280,7 +279,7 @@ function initCloudSync(){
   window.addEventListener('wendao-cloud-conflict',()=>showCloudConflict());
   window.addEventListener('wendao-cloud-state',event=>{state=upgradeState(event.detail.state,false);state.syncMeta={...(state.syncMeta||{}),localUpdatedAt:event.detail.updatedAt,cloudUpdatedAt:event.detail.updatedAt};persistCloudState();renderAll();toast('已载入云端最新修行档案。');});
   window.addEventListener('wendao-cloud-meta',event=>{state.syncMeta={...(state.syncMeta||{}),localUpdatedAt:event.detail.updatedAt,cloudUpdatedAt:event.detail.updatedAt};persistCloudState();q('#cloudLastSync').textContent=`最近同步：${new Date(event.detail.updatedAt).toLocaleString('zh-CN')}`;});
-  window.addEventListener('wendao-cloud-ready',()=>WendaoCloud.sync(state).catch(error=>toast(`云同步暂时失败：${error.message}`)));window.WendaoCloud?.bootstrap();
+  window.addEventListener('wendao-cloud-ready',()=>{renderCloudStatus();toast('云端账号已连接；为保护本机档案，请手动点击同步。');});window.WendaoCloud?.bootstrap();
 }
 function initPwa(){
   window.addEventListener('beforeinstallprompt',event=>{event.preventDefault();deferredInstallPrompt=event;q('#installAppBtn').hidden=false;});

@@ -358,6 +358,10 @@
     clearTimeout(pushTimer);
     pendingState = null;
     pendingConflict = null;
+    try {
+      const currentLocal = localStorage.getItem('wendao-cultivation-v1');
+      if (currentLocal) localStorage.setItem('wendao-cultivation-pre-cloud-v1', currentLocal);
+    } catch {}
     const remoteTime = remote.updated_at || new Date().toISOString();
     const incoming = {
       ...remote.state,

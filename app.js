@@ -214,93 +214,7 @@ function parseChartText(text){
   const timePattern=/(?:[01]?\d|2[0-3])[:：][0-5]\d/g,rangePattern=/((?:[01]?\d|2[0-3])[:：][0-5]\d)\s*(?:-|—|~|～|至)\s*((?:[01]?\d|2[0-3])[:：][0-5]\d)/;
   const ignored=/^(星期|周)[一二三四五六日天]$|^(时间|节次|上午|下午|晚上|课程|任务|备注)$/;
   const seen=new Set(),items=[];
-  String(text||'').split(/\r?\n/).map(line=>line.replace(/[|｜]+/g,' ').replace(/\s+/g,' ').trim()).forEach(line=>{
-    if(line.length<2||ignored.test(line))return;
-    const range=line.match(rangePattern),times=line.match(timePattern)||[],time=times[0]?normalizeChartTime(times[0]):'自选';
-    let name=line.replace(rangePattern,' ').replace(timePattern,' ').replace(/^(?:星期|周)[一二三四五六日天]\s*/,'').replace(/^[\d一二三四五六七八九十]+[.、)）]\s*/,'').replace(/\s+/g,' ').trim();
-    name=name.replace(/^(上午|下午|晚上)\s*/,'').replace(/\s*(教室|地点)[:：].*$/,'').trim();if(name.length<2||/^\d+$/.test(name))return;
-    const key=`${time}|${name}`;if(seen.has(key))return;seen.add(key);
-    const type=inferTaskType(name);let target=type==='light'||type==='foundation'?1:2;
-    if(range){const [sh,sm]=normalizeChartTime(range[1]).split(':').map(Number),[eh,em]=normalizeChartTime(range[2]).split(':').map(Number),minutes=(eh*60+em)-(sh*60+sm);if(minutes>0)target=clamp(Math.round(minutes/25),1,6);}
-    items.push({id:`candidate_${items.length}`,selected:true,name,time,type,target});
-  });
-  return items.slice(0,24);
-}
-function loadScheduleCandidatesFromText(){const text=q('#ocrRawText').value.trim();if(!text)return toast('没有可生成任务的文字。');scheduleCandidates=parseChartText(text);renderScheduleCandidates();if(!scheduleCandidates.length)toast('没有识别出有效任务，请把每项任务整理成一行后重试。');}
-function renderScheduleCandidates(){
-  const wrap=q('#scheduleCandidates');q('#scheduleCandidateCount').textContent=`${scheduleCandidates.filter(x=>x.selected).length} / ${scheduleCandidates.length} 项`;q('#importScheduleTasks').disabled=!scheduleCandidates.some(x=>x.selected);
-  wrap.innerHTML=scheduleCandidates.length?scheduleCandidates.map((item,index)=>`<div class="schedule-candidate"><input type="checkbox" data-candidate-index="${index}" data-candidate-field="selected" ${item.selected?'checked':''} aria-label="选择${escapeHtml(item.name)}"/><label>任务名称<input data-candidate-index="${index}" data-candidate-field="name" value="${escapeHtml(item.name)}" /></label><label>时间<input type="time" data-candidate-index="${index}" data-candidate-field="time" value="${item.time==='自选'?'':item.time}" /></label><label>类型<select data-candidate-index="${index}" data-candidate-field="type"><option value="deep" ${item.type==='deep'?'selected':''}>深度 · +12</option><option value="standard" ${item.type==='standard'?'selected':''}>标准 · +10</option><option value="light" ${item.type==='light'?'selected':''}>轻度 · +6</option><option value="foundation" ${item.type==='foundation'?'selected':''}>道基 · +0</option></select></label><label>目标单元<input type="number" min="1" max="18" data-candidate-index="${index}" data-candidate-field="target" value="${item.target}" /></label></div>`).join(''):'<p class="muted empty-candidates">尚未生成任务。</p>';
-  qa('[data-candidate-field]').forEach(input=>input.onchange=()=>{const item=scheduleCandidates[Number(input.dataset.candidateIndex)],field=input.dataset.candidateField;if(!item)return;if(field==='selected')item.selected=input.checked;else if(field==='target')item.target=clamp(Number(input.value)||1,1,18);else if(field==='time')item.time=input.value||'自选';else item[field]=input.value;renderScheduleCandidateSummary();});
-}
-function renderScheduleCandidateSummary(){q('#scheduleCandidateCount').textContent=`${scheduleCandidates.filter(x=>x.selected).length} / ${scheduleCandidates.length} 项`;q('#importScheduleTasks').disabled=!scheduleCandidates.some(x=>x.selected);}
-function importScheduleTasks(){
-  const selected=scheduleCandidates.filter(item=>item.selected&&item.name.trim());if(!selected.length)return toast('请至少选择一项有效任务。');const stamp=Date.now();
-  const tasks=selected.map((item,index)=>{const type=Object.hasOwn(taskXp,item.type)?item.type:'standard',target=clamp(Number(item.target)||1,1,18);return{id:`chart_${stamp}_${index}`,name:item.name.trim(),type,target,time:item.time||'自选',xp:taskXp[type],meta:`图表导入 · ${taskTypeNames[type]} · 目标 ${target} 单元`,custom:true};});
-  state.customTasks[todayKey()]=[...(state.customTasks[todayKey()]||[]),...tasks];saveState();q('#scheduleImportDialog').close();renderDashboard();toast(`已从图表加入 ${tasks.length} 项今日修炼令。`);
-}
-function renderFoundations(){ const day=state.foundations[todayKey()]||{}; q('#foundationList').innerHTML=foundationDefs.map(([id,n,d])=>`<button class="foundation-seal ${day[id]?'done':''}" data-foundation="${id}"><b>${n}</b><span>${d}</span></button>`).join(''); q('#foundationScore').textContent=`${Object.values(day).filter(Boolean).length}/4`; qa('[data-foundation]').forEach(b=>b.onclick=()=>{state.foundations[todayKey()]={...day,[b.dataset.foundation]:!day[b.dataset.foundation]};saveState();renderAll();}); }
-function lastDays(n=7){ return Array.from({length:n},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(n-1-i));return d.toLocaleDateString('sv-SE')}); }
-function renderWeekChart(){ const days=lastDays(), max=180; let week=0; q('#weekChart').innerHTML=days.map(k=>{const r=state.records[k]||{},xp=r.xp??(k===todayKey()?taskDayStats().xp:0),dao=r.foundationScore||Object.values(state.foundations[k]||{}).filter(Boolean).length;week+=xp;return `<div class="day-bar" title="${k} · ${xp} 修为"><div class="bar" style="height:${Math.max(2,xp/max*100)}%"></div><div class="dao-dots">${'<i></i>'.repeat(dao)}</div><label>${new Date(k+'T00:00:00').getDate()}</label></div>`}).join('');q('#weekXp').textContent=`本周 ${week}`; }
-function renderLimits(){ const phase=phaseInfo(),r=state.records[todayKey()]||{},items=[['游戏',r.gameMinutes||0,state.survivalMode?30:phase.game],['社交媒体',r.socialMinutes||0,phase.social]]; q('#digitalPhase').textContent=phase.label;q('#limitMeters').innerHTML=items.map(([n,v,l])=>{const p=clamp(v/l*100,0,100);return `<div class="limit-meter"><div class="limit-row"><span>${n}</span><span>${v} / ${l} 分钟</span></div><div class="meter"><i class="${p>90?'warning':''} ${v>l?'over':''}" style="width:${p}%"></i></div></div>`}).join(''); }
-
-function renderRealm(){
-  q('#realmMap').innerHTML=realms.map((r,i)=>{const reached=state.totalXp>=r.min,current=getRealm().name===r.name;return `<div class="realm-node ${reached?'reached':''} ${current?'current':''}"><i class="realm-dot"></i><b>${r.name}</b><small>${r.min.toLocaleString()}${r.max===25000&&r.name==='问鼎'?'＋':'—'+r.max.toLocaleString()}</small>${i===0?`<div class="realm-sublevels">${Array.from({length:15},(_,j)=>`<i class="${state.totalXp>=j*320?'on':''}"></i>`).join('')}</div>`:''}</div>`}).join('');
-  const trialKeys=['sevenDays','foundation','realOutput']; const trialDefs=[['sevenDays','完成 7 个真实记录日'],['foundation','近 7 日平均道基 ≥ 3 枚'],['realOutput','完成一次真实能力输出或自测']];
-  q('#trialTitle').textContent=`${realmDisplay()} · 突破试炼`; q('#trialChecklist').innerHTML=trialDefs.map(([id,t])=>`<label class="trial-item"><input type="checkbox" data-trial="${id}" ${state.trials[id]?'checked':''}/><span>${t}</span></label>`).join(''); qa('[data-trial]').forEach(c=>c.onchange=()=>{state.trials[c.dataset.trial]=c.checked;saveState();renderRealm();});
-  const bounds=currentLevelBounds(),xpReady=state.totalXp>=bounds.max,trialReady=trialKeys.every(k=>state.trials[k]); q('#breakthroughStatus').innerHTML=xpReady&&trialReady?'双钥匙齐备：可以突破。':`修为钥匙：${xpReady?'已就绪':'尚缺 '+(bounds.max-state.totalXp)}　·　试炼钥匙：${trialReady?'已就绪':'尚未完成'}`;
-}
-
-function bandRealm(b){ return englishLevels.filter(x=>x[2]<=b).at(-1)?.[0]||'凝气'; }
-function englishRealmFromXp(xp){if(xp>=7200)return['问鼎',7200,7200];if(xp>=4200)return['婴变',4200,7200];if(xp>=1800)return['化神',1800,4200];return['元婴圆满',0,1800];}
-function todayEnglishLog(){
-  state.english.practiceLogs[todayKey()]=state.english.practiceLogs[todayKey()]||{};
-  state.english.mockLogs[todayKey()]=state.english.mockLogs[todayKey()]||0;
-  return state.english.practiceLogs[todayKey()];
-}
-function todayEnglishXp(){
-  const log=state.english.practiceLogs[todayKey()]||{};
-  const practice=englishActivityDefs.reduce((sum,[id,,xp])=>sum+(log[id]||0)*xp,0);
-  return practice+(state.english.mockLogs[todayKey()]||0);
-}
-function renderEnglish(){
-  const e=state.english,[realm,min,max]=englishRealmFromXp(e.eXp),toNext=Math.max(1,max-min),pct=max===min?100:clamp((e.eXp-min)/toNext*100,0,100),log=todayEnglishLog(),todayXp=todayEnglishXp(),hasMock=(e.mockLogs[todayKey()]||0)>0,dailyCap=hasMock?100:75;
-  q('#englishRealm').textContent=realm;
-  q('#englishXpLabel').textContent=`${e.eXp} / ${max}`;
-  q('#englishXpProgress').style.width=`${pct}%`;
-  q('#todayEnglishXp').textContent=`今日 ${todayXp} / ${dailyCap}`;
-  q('#englishPracticeList').innerHTML=englishActivityDefs.map(([id,name,xp,maxCount,desc])=>`<div class="practice-xp-item"><header><b>${name}</b><em>+${xp}</em></header><p>${desc}</p><div class="practice-xp-controls"><button data-english-activity="${id}" data-delta="-1">撤回</button><span>${log[id]||0}/${maxCount}</span><button data-english-activity="${id}" data-delta="1">完成一轮</button></div></div>`).join('');
-  qa('[data-english-activity]').forEach(btn=>btn.onclick=()=>updateEnglishActivity(btn.dataset.englishActivity,Number(btn.dataset.delta)));
-  qa('[data-mock-xp]').forEach(btn=>btn.onclick=()=>setEnglishMock(Number(btn.dataset.mockXp)));
-  q('#englishTrials').innerHTML=englishTrialDefs.map(([id,n,t,d])=>`<button class="english-trial ${state.englishTrials[id]?'done':''}" data-english-trial="${id}"><em>${n}</em><b>${t}</b><span>${d}</span></button>`).join('');
-  const done=englishTrialDefs.filter(([id])=>state.englishTrials[id]).length;
-  q('#englishTrialsDone').textContent=`${done} / 4 完成`;
-  qa('[data-english-trial]').forEach(x=>x.onclick=()=>{state.englishTrials[x.dataset.englishTrial]=!state.englishTrials[x.dataset.englishTrial];saveState();renderEnglish();});
-  const breakthroughDefs=[
-    ['化神','1800 E-XP',['最近5套平均≥30/40；至少4套≥30；最低≥28','连续专注25分钟；漏听后下一题恢复','10分钟视频可做3分钟结构化英语复述']],
-    ['婴变','4200 E-XP',['最近5套平均≥33；最低≥31；S3+S4平均≥16/20','整套完成且拼写/单复数错误≤2','5分钟陈述；口语与写作初步达到7.0']],
-    ['问鼎','7200 E-XP',['最近5套平均≥35；最低≥34；至少2套≥36','陌生口音主题仍稳定，漏听不再连锁崩盘','总分约8.0；听读8.0—8.5；说写≥7.5']]
-  ];
-  q('#englishBreakthroughs').innerHTML=breakthroughDefs.map((x,i)=>`<div class="breakthrough-level ${i===0?'current':''}"><header><h4>${x[0]}</h4><span>${x[1]}</span></header><ul>${x[2].map(t=>`<li>${t}</li>`).join('')}</ul></div>`).join('');
-  q('#englishLadder').innerHTML=englishLevels.map(([n,d])=>`<div class="english-level ${n==='元婴'?'active':''}"><b>${n==='元婴'?'元婴圆满':n}</b><span>${d}</span></div>`).join('');
-}
-function updateEnglishActivity(id,delta){
-  const def=englishActivityDefs.find(x=>x[0]===id),log=todayEnglishLog(),before=log[id]||0,after=clamp(before+delta,0,def[3]);
-  if(after===before)return;
-  const change=(after-before)*def[2],cap=(state.english.mockLogs[todayKey()]||0)>0?100:75;
-  if(change>0&&todayEnglishXp()+change>cap)return toast(`今日英语修为上限为 ${cap} E-XP；超出的训练仍有价值，但不再计分。`);
-  log[id]=after;state.english.eXp=Math.max(45,state.english.eXp+change);saveState();renderEnglish();renderDashboard();toast(change>0?`${def[1]}完成：＋${change} E-XP。`:`已撤回 ${def[1]}记录。`);
-}
-function setEnglishMock(xp){
-  const old=state.english.mockLogs[todayKey()]||0;
-  if(old===xp){state.english.mockLogs[todayKey()]=0;state.english.eXp=Math.max(45,state.english.eXp-xp);toast('已撤回今日雅思试炼记录。');}
-  else{const base=todayEnglishXp()-old;if(base+xp>100)return toast('模考日英语修为总上限为 100 E-XP。');state.english.mockLogs[todayKey()]=xp;state.english.eXp=Math.max(45,state.english.eXp-old+xp);toast(`雅思试炼已记录：＋${xp} E-XP。`);}
-  saveState();renderEnglish();renderDashboard();
-}
-
-function renderHistory(){
-  const records=Object.entries(state.records).sort((a,b)=>b[0].localeCompare(a[0])),totalDays=records.length;
-  const avgDao=totalDays?records.reduce((a,[,r])=>a+(r.foundationScore||0),0)/totalDays:0,avgEnergy=totalDays?records.reduce((a,[,r])=>a+(Number(r.energy)||0),0)/totalDays:0,streak=calcStreak();
-  q('#historySummary').innerHTML=[['真实记录日',`${totalDays} 天`],['当前连续',`${streak} 天`],['平均道基',`${avgDao.toFixed(1)} / 4`],['平均能量',`${avgEnergy.toFixed(1)} / 10`]].map(([n,v])=>`<div class="summary-card"><span>${n}</span><strong>${v}</strong></div>`).join('');
+  String(text||'').split(/\r?\n/).map(line=>line.replace(/[|｜]+/g…3220 tokens truncated…summary-card"><span>${n}</span><strong>${v}</strong></div>`).join('');
   q('#historyList').innerHTML=records.length?records.map(([k,r])=>{
     const reflections=[r.growth&&`<div><b>能力增长</b><p>${escapeHtml(r.growth)}</p></div>`,r.challenge&&`<div><b>最大心魔</b><p>${escapeHtml(r.challenge)}</p></div>`,r.worked&&`<div><b>保留做法</b><p>${escapeHtml(r.worked)}</p></div>`,r.tomorrow&&`<div><b>明日重点</b><p>${escapeHtml(r.tomorrow)}</p></div>`].filter(Boolean).join('');
     const second=typeof r.secondReview==='string'?r.secondReview:r.secondReview?.text;
@@ -342,10 +256,29 @@ async function cloudSignUp(){
 function openCloudDialogRefresh(){const status=WendaoCloud.getStatus();q('#cloudLoggedOut').hidden=!!status.loggedIn;q('#cloudLoggedIn').hidden=!status.loggedIn;q('#cloudAccountEmail').textContent=status.email||'—';q('#cloudDialogStatus').textContent=status.loggedIn?'账号已连接，正在保持多端一致。':'请登录云端账号。';}
 async function manualCloudSync(){
   if(!window.WendaoCloud?.getStatus().loggedIn)return openCloudDialog();setCloudActionBusy(true,'正在同步…');
-  try{const result=await WendaoCloud.sync(state);toast(result?.direction==='pull'?'已从云端恢复最新档案。':'当前进度已同步到云端。');q('#cloudLastSync').textContent=`最近同步：${new Date().toLocaleString('zh-CN')}`;}catch(error){toast(error.message);}finally{setCloudActionBusy(false);renderCloudStatus();}
+  try{
+    const result=await WendaoCloud.sync(state);
+    if(result?.direction==='busy'){q('#cloudDialogStatus').textContent='已有同步正在进行，稍等几秒后再试。';toast('已有同步正在进行。');return;}
+    if(result?.direction==='conflict'){showCloudConflict();q('#cloudDialogStatus').textContent='两端都有新进度，请选择保留本机或载入云端。';toast('发现两端进度，请在云端面板选择。');return;}
+    const message=result?.direction==='pull'?'已从云端恢复最新档案。':'当前进度已同步到云端。';
+    toast(message);q('#cloudDialogStatus').textContent=message;q('#cloudLastSync').textContent=`最近同步：${new Date().toLocaleString('zh-CN')}`;
+  }catch(error){q('#cloudDialogStatus').textContent=`同步失败：${error.message}`;toast(`同步失败：${error.message}`);}finally{setCloudActionBusy(false);renderCloudStatus();}
+}
+function showCloudConflict(){const panel=q('#cloudConflict');if(panel)panel.hidden=false;if(q('#cloudDialog')&&!q('#cloudDialog').open)q('#cloudDialog').showModal();}
+function hideCloudConflict(){const panel=q('#cloudConflict');if(panel)panel.hidden=true;}
+async function resolveCloudConflict(choice){
+  setCloudActionBusy(true,choice==='local'?'正在上传本机档案…':'正在载入云端档案…');
+  try{
+    const result=await WendaoCloud.resolveConflict(choice);
+    hideCloudConflict();
+    const message=result?.direction==='pull'?'已载入云端档案。':'本机档案已上传云端。';
+    q('#cloudDialogStatus').textContent=message;q('#cloudLastSync').textContent=`最近同步：${new Date().toLocaleString('zh-CN')}`;toast(message);
+  }catch(error){q('#cloudDialogStatus').textContent=`处理失败：${error.message}`;toast(`处理失败：${error.message}`);}
+  finally{setCloudActionBusy(false);renderCloudStatus();}
 }
 function initCloudSync(){
   window.addEventListener('wendao-cloud-status',event=>{cloudUiStatus={...cloudUiStatus,...event.detail};renderCloudStatus();if(event.detail.error)toast(`云同步暂时失败：${event.detail.error}`);});
+  window.addEventListener('wendao-cloud-conflict',()=>showCloudConflict());
   window.addEventListener('wendao-cloud-state',event=>{state=upgradeState(event.detail.state,false);state.syncMeta={...(state.syncMeta||{}),localUpdatedAt:event.detail.updatedAt,cloudUpdatedAt:event.detail.updatedAt};persistCloudState();renderAll();toast('已载入云端最新修行档案。');});
   window.addEventListener('wendao-cloud-meta',event=>{state.syncMeta={...(state.syncMeta||{}),localUpdatedAt:event.detail.updatedAt,cloudUpdatedAt:event.detail.updatedAt};persistCloudState();q('#cloudLastSync').textContent=`最近同步：${new Date(event.detail.updatedAt).toLocaleString('zh-CN')}`;});
   window.addEventListener('wendao-cloud-ready',()=>WendaoCloud.sync(state).catch(error=>toast(`云同步暂时失败：${error.message}`)));window.WendaoCloud?.bootstrap();
@@ -369,7 +302,7 @@ function initEvents(){
   q('#scanTaskChart').onclick=openScheduleImport;q('#scheduleImageInput').onchange=e=>handleScheduleImage(e.target.files[0]);q('#recognizeSchedule').onclick=recognizeScheduleImage;q('#parseScheduleText').onclick=loadScheduleCandidatesFromText;q('#importScheduleTasks').onclick=e=>{e.preventDefault();importScheduleTasks();};
   q('#scheduleDropZone').ondragover=e=>{e.preventDefault();q('#scheduleDropZone').classList.add('dragging');};q('#scheduleDropZone').ondragleave=()=>q('#scheduleDropZone').classList.remove('dragging');q('#scheduleDropZone').ondrop=e=>{e.preventDefault();q('#scheduleDropZone').classList.remove('dragging');handleScheduleImage(e.dataTransfer.files[0]);};
   q('#scheduleImportDialog').addEventListener('close',()=>{if(scheduleImageUrl){URL.revokeObjectURL(scheduleImageUrl);scheduleImageUrl='';}});
-  q('#cloudStatusBtn').onclick=openCloudDialog;q('#openCloudSettings').onclick=openCloudDialog;q('#cloudSignIn').onclick=cloudSignIn;q('#cloudSignUp').onclick=cloudSignUp;q('#cloudSyncNow').onclick=manualCloudSync;q('#manualCloudSync').onclick=manualCloudSync;q('#cloudSignOut').onclick=()=>{WendaoCloud.signOut();openCloudDialogRefresh();renderCloudStatus();toast('已退出云端账号，本机档案仍然保留。');};q('#installAppBtn').onclick=installPwa;
+  q('#cloudStatusBtn').onclick=openCloudDialog;q('#openCloudSettings').onclick=openCloudDialog;q('#cloudSignIn').onclick=cloudSignIn;q('#cloudSignUp').onclick=cloudSignUp;q('#cloudSyncNow').onclick=manualCloudSync;q('#manualCloudSync').onclick=manualCloudSync;q('#cloudUseLocal').onclick=()=>resolveCloudConflict('local');q('#cloudUseRemote').onclick=()=>resolveCloudConflict('remote');q('#cloudSignOut').onclick=()=>{WendaoCloud.signOut();hideCloudConflict();openCloudDialogRefresh();renderCloudStatus();toast('已退出云端账号，本机档案仍然保留。');};q('#installAppBtn').onclick=installPwa;
   q('#timerStart').onclick=toggleTimer;q('#timerReset').onclick=resetTimer;
 }
 function switchView(id){qa('.view').forEach(v=>v.classList.toggle('active',v.id===id));qa('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===id));q('#pageTitle').textContent={dashboard:'今日洞府',realm:'境界天梯',english:'英语道境',history:'修行簿',settings:'系统设置'}[id];window.scrollTo(0,0);}

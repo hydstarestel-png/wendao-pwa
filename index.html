@@ -326,6 +326,11 @@
         <p id="cloudLastSync" class="muted">等待同步</p>
         <div class="cloud-auth-actions"><button id="cloudSyncNow" type="button" class="primary-btn">立即同步</button><button id="cloudSignOut" type="button" class="ghost-btn">退出账号</button></div>
       </div>
+      <div id="cloudConflict" class="cloud-conflict" hidden>
+        <strong>检测到手机和电脑都有新进度</strong>
+        <p>同步已经安全暂停，没有覆盖任何档案。请选择这次要保留哪一份。</p>
+        <div class="cloud-auth-actions"><button id="cloudUseLocal" type="button" class="primary-btn">保留本机并上传</button><button id="cloudUseRemote" type="button" class="ghost-btn">载入云端档案</button></div>
+      </div>
       <p id="cloudDialogStatus" class="checkin-preview">本地优先：断网时照常使用，联网后自动同步。</p>
     </form>
   </dialog>
